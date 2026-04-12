@@ -1,0 +1,213 @@
+a,
+.green {
+  text-decoration: none;
+  color: var(--vt-c-text-light-1);
+  background-color: transparent;
+  transition: all 0.3s ease;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+}
+a:hover {
+  background-color: var(--color-border-hover);
+}
+
+/* 🔘 Botones */
+button {
+  background-color: hsla(160, 100%, 37%, 1);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: background-color 0.3s ease-in-out;
+}
+button:hover {
+  background-color: hsla(160, 100%, 37%, 0.8);
+}
+
+.scale-fade-enter-active,
+.scale-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.scale-fade-enter-from,
+.scale-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.85);
+}
+
+/* 🧊 Animación de fade */
+.fade-in {
+  animation: fadeIn 0.6s ease forwards;
+}
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+
+@keyframes floatRotatePulse {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.8;
+    color: #000000;
+  }
+  33% {
+    transform: translateY(-6px) rotate(-3deg);
+    opacity: 1;
+    color: #000000;
+  }
+  66% {
+    transform: translateY(6px) rotate(3deg);
+    opacity: 0.9;
+    color: #f87171;
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 0.8;
+    color: #ef4444;
+  }
+}
+.animate-float-enhanced {
+  animation: floatRotatePulse 6s ease-in-out infinite;
+}
+
+/* 📍 Posición fija centrada de la multa flotante */
+.multa-posicion {
+  position: fixed;
+  top: 1rem;
+  left: 10%;
+  transform: translateX(-50%);
+  z-index: 105;
+  pointer-events: none;
+}
+
+/* ✳️ Estilo visual del ícono flotante */
+.flota-icono {
+  width: 200px;
+  height: 200px;
+  color: #5a4d4d;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+  animation: floatRotatePulse 6s ease-in-out infinite;
+}
+
+/* 📝 Formulario visual moderno */
+.input-field {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background-color: #f9fafb;
+  font-size: 0.9rem;
+  transition: border-color 0.3s ease;
+}
+.input-field:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3);
+  background-color: #fff;
+}
+
+.submit-button {
+  background: linear-gradient(to right, #37974c, #3b82f6);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: transform 0.2s ease;
+}
+.submit-button:hover {
+  transform: scale(1.02);
+  background: linear-gradient(to right, #1e40af, #298f3f);
+}
+
+/* 🔷 Navbar */
+.navbar {
+  background-color: #4d6088;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: system-ui, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.titulo-app {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.nav-items {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: 500;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nav-items a {
+  text-decoration: none;
+  color: white;
+  position: relative;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+}
+.nav-items a:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 🔴 Contador de notificaciones */
+.contador-badge {
+  position: absolute;
+  top: -0.6rem;
+  right: -1.1rem;
+  background-color: #ef4444;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  animation: pulse 1.5s infinite;
+  pointer-events: none;
+  line-height: 1;
+}
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.75; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.navbar-icon {
+  width: 32px;
+  height: 32px;
+  color: #6a3f3f;
+  animation: floatRotatePulse 6s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+  vertical-align: middle;
+}
+
+.multa-posicion {
+  position: fixed;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 50;
+  animation: flotar 3s ease-in-out infinite;
+}
+
+.flota-icono {
+  width: 80px;
+  height: 80px;
+  color: #fff;
+  opacity: 0.85;
+}
+
+/* Animación flotante opcional */
+@keyframes flotar {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50% { transform: translate(-50%, -50%) translateY(-10px); }
+}
