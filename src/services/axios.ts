@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { resolveApiBaseUrl } from './apiBase'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-android-production-55c1.up.railway.app/api'
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL)
 
 const api = axios.create({
   baseURL: API_BASE_URL,

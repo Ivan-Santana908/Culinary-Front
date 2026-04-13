@@ -83,9 +83,10 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
+import { resolveApiBaseUrl } from '@/services/apiBase'
 
 const router = useRouter()
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-android-production-55c1.up.railway.app/api'
+const API_BASE_URL = resolveApiBaseUrl(import.meta.env.VITE_API_URL)
 
 const nombre = ref('')
 const email = ref('')
