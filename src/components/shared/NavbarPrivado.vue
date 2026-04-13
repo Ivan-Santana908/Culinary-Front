@@ -31,6 +31,15 @@
               Para mí
             </router-link>
 
+            <router-link
+              to="/mi-despensa"
+              class="flex items-center px-3 py-2 text-sm font-medium text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
+              active-class="bg-white/20"
+            >
+              <CollectionIcon class="w-5 h-5 mr-1.5" />
+              Mi despensa
+            </router-link>
+
             <router-link 
               to="/plan-semanal" 
               class="flex items-center px-3 py-2 text-sm font-medium text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
@@ -131,6 +140,16 @@
           Para mí
         </router-link>
 
+        <router-link
+          to="/mi-despensa"
+          class="flex items-center px-3 py-2 text-base font-medium text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
+          active-class="bg-white/20"
+          @click="mobileMenuOpen = false"
+        >
+          <CollectionIcon class="w-5 h-5 mr-1.5" />
+          Mi despensa
+        </router-link>
+
         <router-link 
           to="/plan-semanal" 
           class="flex items-center px-3 py-2 text-base font-medium text-white hover:bg-white/10 rounded-lg transition-colors duration-200"
@@ -185,6 +204,7 @@ import {
   BookOpenIcon,
   UserCircleIcon,
   CalendarIcon,
+  CollectionIcon,
   PlusIcon,
   LogoutIcon,
   MenuIcon,

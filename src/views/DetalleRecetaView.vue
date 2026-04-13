@@ -38,7 +38,7 @@
                  :src="receta.imagen" 
                  :alt="receta.titulo"
                  class="w-full h-full object-cover"
-                 @error="(e) => (e.target as HTMLImageElement).src = 'https://via.placeholder.com/800x400/A97C50/FFFFFF?text=🍳+Receta'" />
+                @error="handleImageError" />
             <div v-else class="flex items-center justify-center h-full text-6xl">🍳</div>
           </div>
 
@@ -113,7 +113,7 @@
                     <strong class="text-gray-900">{{ ing.nombre }}</strong>
                   </span>
                   <span class="text-amber-700 font-bold text-base bg-white px-3 py-1 rounded-lg">
-                    {{ formatearCantidad(obtenerCantidadEscalada(ing.cantidad), ing.unidad) }}
+                    {{ formatearCantidad(obtenerCantidadEscalada(ing.cantidad), ing.unidad, ing.nombre) }}
                   </span>
                 </div>
               </div>
@@ -197,7 +197,7 @@
                       <input type="checkbox" 
                              class="w-5 h-5 text-green-500 rounded focus:ring-2 focus:ring-green-400" />
                       <span class="text-gray-800 text-base">
-                        <strong>{{ ing.nombre }}</strong>: {{ formatearCantidad(obtenerCantidadEscalada(ing.cantidad), ing.unidad) }}
+                        <strong>{{ ing.nombre }}</strong>: {{ formatearCantidad(obtenerCantidadEscalada(ing.cantidad), ing.unidad, ing.nombre) }}
                       </span>
                     </div>
                   </div>
@@ -318,25 +318,49 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/services/axios'
+import {
+  formatQuantity,
+  resolveDisplayMeasure,
+  normalizeForStorage,
+  normalizeText,
+  normalizeUnit,
+  containsWholeTerm,
+  convertAmountForUnit,
+  getPreferredUnitForIngredient
+} from '@/utils/recetasDisponibles'
 
 interface Ingrediente {
+  ingredienteId?: string
   nombre: string
   cantidad: number | string
   unidad: string
 }
 
 interface IngredienteRaw {
+  _id?: string
+  id?: string
+  ingrediente_id?: string
   nombre?: string
+  nombre_ingrediente?: string
+  ingrediente_nombre?: string
   cantidad?: number | string
   unidad?: string
-  ingrediente?: {
+  unidad_presentacion?: string
+  ingrediente?: string | {
+    _id?: string
+    id?: string
+    ingrediente_id?: string
     nombre?: string
+    nombre_ingrediente?: string
+    ingrediente_nombre?: string
     cantidad?: number | string
     unidad?: string
+    unidad_presentacion?: string
   }
   pivot?: {
     cantidad?: number | string
     unidad?: string
+    unidad_presentacion?: string
   }
 }
 
@@ -353,6 +377,20 @@ interface Receta {
   imagen?: string
   dificultad?: string
   tipo?: string
+}
+
+interface IngredienteDespensa {
+  _id?: string
+  id?: string
+  ingrediente_id?: string | null
+  nombre_ingrediente?: string
+  nombre?: string
+  cantidad?: number | string | null
+  unidad?: string
+}
+
+interface MiDespensaResponse {
+  despensa: Record<string, IngredienteDespensa[]>
 }
 
 const route = useRoute()
@@ -484,11 +522,166 @@ function pasoAnterior() {
   }
 }
 
-function finalizarReceta() {
+async function finalizarReceta() {
+  const resultado = await consumirIngredientesDespensa()
   detenerTemporizador()
-  alert('🎉 ¡Felicidades! Has completado la receta.\n\n¡Buen provecho! 😋')
+  alert(`🎉 ¡Felicidades! Has completado la receta.\n\n${resultado}\n\n¡Buen provecho! 😋`)
   modoCocina.value = false
   pasoActual.value = 0
+}
+
+async function consumirIngredientesDespensa(): Promise<string> {
+  try {
+    const { data } = await api.get<MiDespensaResponse>('/despensa')
+    const items = Object.values(data?.despensa || {}).flat()
+
+    const getItemId = (item: IngredienteDespensa): string => String(item._id || item.id || '')
+    const getItemNombre = (item: IngredienteDespensa): string => String(item.nombre_ingrediente || item.nombre || '')
+    const getItemUnidad = (item: IngredienteDespensa): string => String(item.unidad || 'unidad')
+
+    const cambios = new Map<string, { item: IngredienteDespensa; cantidadNueva: number }>()
+
+    const obtenerCantidadActual = (item: IngredienteDespensa): number => {
+      const itemId = getItemId(item)
+      if (!itemId) return 0
+      const cambio = cambios.get(itemId)
+      if (cambio) return cambio.cantidadNueva
+      return Number(item.cantidad || 0)
+    }
+
+    const coincideNombre = (nombreReceta: string, nombreDespensa: string): boolean => {
+      const recetaNorm = normalizeText(nombreReceta)
+      const despensaNorm = normalizeText(nombreDespensa)
+      if (!recetaNorm || !despensaNorm) return false
+      if (recetaNorm === despensaNorm) return true
+      if (containsWholeTerm(recetaNorm, despensaNorm) || containsWholeTerm(despensaNorm, recetaNorm)) return true
+
+      // fallback: comparte al menos una palabra relevante (>= 4 chars)
+      const tokensReceta = recetaNorm.split(/\s+/).filter((t) => t.length >= 4)
+      const tokensDespensa = new Set(despensaNorm.split(/\s+/).filter((t) => t.length >= 4))
+      return tokensReceta.some((t) => tokensDespensa.has(t))
+    }
+
+    const parseCantidad = (raw: unknown): number => {
+      if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0
+      if (typeof raw !== 'string') return 0
+
+      const normalized = raw.trim().replace(',', '.')
+      const match = normalized.match(/[-+]?\d+(?:\.\d+)?/)
+      if (!match) return 0
+
+      const value = Number(match[0])
+      return Number.isFinite(value) ? value : 0
+    }
+
+    let consumidos = 0
+    let omitidos = 0
+
+    for (const ingReceta of receta.value.ingredientes) {
+      const nombreObjetivo = ingReceta.nombre || ''
+      const cantidadEscalada = obtenerCantidadEscalada(ingReceta.cantidad)
+      const unidadEntrada = (ingReceta.unidad || '').trim() || getPreferredUnitForIngredient(nombreObjetivo)
+      const requerido = normalizeForStorage(cantidadEscalada, unidadEntrada)
+      const ingredienteRecetaId = normalizeText(ingReceta.ingredienteId)
+
+      if (!nombreObjetivo || !Number.isFinite(requerido.cantidad) || requerido.cantidad <= 0) {
+        continue
+      }
+
+      const candidatos = items
+        .filter((d) => !!getItemId(d) && d.cantidad !== null && d.cantidad !== undefined)
+        .filter((d) => {
+          const ingredienteDespensaId = normalizeText(d.ingrediente_id || '')
+          if (ingredienteRecetaId && ingredienteDespensaId && ingredienteRecetaId === ingredienteDespensaId) {
+            return true
+          }
+
+          return coincideNombre(nombreObjetivo, getItemNombre(d))
+        })
+        .sort((a, b) => {
+          const aExact = normalizeText(getItemNombre(a)) === normalizeText(nombreObjetivo)
+          const bExact = normalizeText(getItemNombre(b)) === normalizeText(nombreObjetivo)
+          if (aExact === bExact) return 0
+          return aExact ? -1 : 1
+        })
+
+      if (candidatos.length === 0) {
+        omitidos++
+        continue
+      }
+
+      let faltante = requerido.cantidad
+      let descontoAlgo = false
+
+      for (const despItem of candidatos) {
+        const cantidadActual = parseCantidad(obtenerCantidadActual(despItem))
+        if (!Number.isFinite(cantidadActual) || cantidadActual <= 0) continue
+
+        const unidadDespensa = normalizeUnit(getItemUnidad(despItem))
+        const faltanteEnUnidadDespensa = convertAmountForUnit(faltante, requerido.unidad, unidadDespensa)
+        if (!Number.isFinite(faltanteEnUnidadDespensa) || faltanteEnUnidadDespensa <= 0) continue
+
+        const descontar = Math.min(cantidadActual, faltanteEnUnidadDespensa)
+        if (descontar <= 0) continue
+
+        const despItemId = getItemId(despItem)
+        if (!despItemId) continue
+
+        const nuevaCantidad = Math.max(0, cantidadActual - descontar)
+        cambios.set(despItemId, {
+          item: despItem,
+          cantidadNueva: Number(nuevaCantidad.toFixed(4))
+        })
+
+        const descontadoBase = convertAmountForUnit(descontar, unidadDespensa, requerido.unidad)
+        faltante = Math.max(0, Number((faltante - descontadoBase).toFixed(6)))
+        descontoAlgo = true
+
+        if (faltante <= 0.0001) break
+      }
+
+      if (descontoAlgo) {
+        consumidos++
+      } else {
+        omitidos++
+      }
+    }
+
+    let actualizados = 0
+    let eliminados = 0
+
+    for (const { item, cantidadNueva } of cambios.values()) {
+      const itemId = getItemId(item)
+      if (!itemId) continue
+      if (cantidadNueva <= 0.0001) {
+        await api.delete(`/despensa/${itemId}`)
+        eliminados++
+      } else {
+        await api.put(`/despensa/${itemId}`, {
+          nombre_ingrediente: getItemNombre(item),
+          cantidad: Number(cantidadNueva.toFixed(2)),
+          unidad: getItemUnidad(item)
+        })
+        actualizados++
+      }
+    }
+
+    if (actualizados + eliminados === 0) {
+      return 'Despensa: sin cambios automáticos.'
+    }
+
+    return `Despensa actualizada: ${actualizados} actualizados, ${eliminados} eliminados, ${consumidos} ingredientes consumidos, ${omitidos} omitidos.`
+  } catch (error) {
+    console.error('No se pudo actualizar despensa al finalizar receta', error)
+    return 'No se pudo actualizar despensa automáticamente.'
+  }
+}
+
+function handleImageError(event: Event) {
+  const target = event.target as HTMLImageElement
+  if (target.dataset.fallbackApplied === '1') return
+  target.dataset.fallbackApplied = '1'
+  target.src = '/placeholder-receta.svg'
 }
 
 // Funciones del temporizador
@@ -577,10 +770,28 @@ function normalizarReceta(data: Partial<Receta> & { ingredientes?: IngredienteRa
 }
 
 function normalizarIngrediente(ingrediente: IngredienteRaw): Ingrediente {
+  const ingredienteObj = typeof ingrediente.ingrediente === 'object' && ingrediente.ingrediente !== null
+    ? ingrediente.ingrediente
+    : undefined
+
+  const ingredienteId = ingredienteObj?._id
+    || ingredienteObj?.id
+    || ingredienteObj?.ingrediente_id
+    || ingrediente._id
+    || ingrediente.id
+    || ingrediente.ingrediente_id
+
+  const nombreDesdeIngrediente = typeof ingrediente.ingrediente === 'string'
+    ? ingrediente.ingrediente
+    : ingredienteObj?.nombre || ingredienteObj?.nombre_ingrediente || ingredienteObj?.ingrediente_nombre
+
+  const unidadDesdeIngrediente = ingredienteObj?.unidad || ingredienteObj?.unidad_presentacion
+
   return {
-    nombre: ingrediente.nombre || ingrediente.ingrediente?.nombre || '',
-    cantidad: ingrediente.cantidad ?? ingrediente.pivot?.cantidad ?? ingrediente.ingrediente?.cantidad ?? 0,
-    unidad: ingrediente.unidad || ingrediente.pivot?.unidad || ingrediente.ingrediente?.unidad || ''
+    ingredienteId: ingredienteId ? String(ingredienteId) : undefined,
+    nombre: (ingrediente.nombre || ingrediente.nombre_ingrediente || ingrediente.ingrediente_nombre || nombreDesdeIngrediente || 'Ingrediente').trim(),
+    cantidad: ingrediente.cantidad ?? ingrediente.pivot?.cantidad ?? ingredienteObj?.cantidad ?? 0,
+    unidad: (ingrediente.unidad || ingrediente.unidad_presentacion || ingrediente.pivot?.unidad || ingrediente.pivot?.unidad_presentacion || unidadDesdeIngrediente || '').trim()
   }
 }
 
@@ -638,31 +849,33 @@ function obtenerCantidadEscalada(cantidad: number | string): number {
   return (cantidadBase * personas.value) / porcionesBase.value
 }
 
-function formatearCantidad(cantidad: number, unidad: string): string {
-  const unidadLower = unidad.toLowerCase()
+function formatearCantidad(cantidad: number, unidad: string, nombreIngrediente = ''): string {
+  const medida = resolveDisplayMeasure(nombreIngrediente, cantidad, unidad)
+  const unidadLower = medida.unidad.toLowerCase()
+  const cantidadNormalizada = medida.cantidad
   
   // Convertir gramos a kilogramos si es mayor a 1000
-  if ((unidadLower === 'g' || unidadLower === 'gr' || unidadLower === 'gramos' || unidadLower === 'gramo') && cantidad >= 1000) {
-    return `${(cantidad / 1000).toFixed(1)} kg`
+  if ((unidadLower === 'g' || unidadLower === 'gr' || unidadLower === 'gramos' || unidadLower === 'gramo') && cantidadNormalizada >= 1000) {
+    return `${formatQuantity(cantidadNormalizada / 1000)} kg`
   }
   
   // Convertir mililitros a litros si es mayor a 1000
-  if ((unidadLower === 'ml' || unidadLower === 'mililitros' || unidadLower === 'mililitro') && cantidad >= 1000) {
-    return `${(cantidad / 1000).toFixed(1)} L`
+  if ((unidadLower === 'ml' || unidadLower === 'mililitros' || unidadLower === 'mililitro') && cantidadNormalizada >= 1000) {
+    return `${formatQuantity(cantidadNormalizada / 1000)} L`
   }
   
   // Convertir mililitros a litros si está entre 500-999
-  if ((unidadLower === 'ml' || unidadLower === 'mililitros' || unidadLower === 'mililitro') && cantidad >= 500) {
-    return `${(cantidad / 1000).toFixed(2)} L`
+  if ((unidadLower === 'ml' || unidadLower === 'mililitros' || unidadLower === 'mililitro') && cantidadNormalizada >= 500) {
+    return `${(cantidadNormalizada / 1000).toFixed(2)} L`
   }
   
   // Convertir gramos a kilogramos si está entre 500-999
-  if ((unidadLower === 'g' || unidadLower === 'gr' || unidadLower === 'gramos' || unidadLower === 'gramo') && cantidad >= 500) {
-    return `${(cantidad / 1000).toFixed(2)} kg`
+  if ((unidadLower === 'g' || unidadLower === 'gr' || unidadLower === 'gramos' || unidadLower === 'gramo') && cantidadNormalizada >= 500) {
+    return `${(cantidadNormalizada / 1000).toFixed(2)} kg`
   }
   
   // Simplificar unidades largas
-  let unidadSimplificada = unidad
+  let unidadSimplificada = medida.unidad
   if (unidadLower === 'gramos' || unidadLower === 'gramo') unidadSimplificada = 'g'
   if (unidadLower === 'kilogramos' || unidadLower === 'kilogramo') unidadSimplificada = 'kg'
   if (unidadLower === 'mililitros' || unidadLower === 'mililitro') unidadSimplificada = 'ml'
@@ -674,7 +887,7 @@ function formatearCantidad(cantidad: number, unidad: string): string {
   if (unidadLower === 'piezas' || unidadLower === 'pieza') unidadSimplificada = 'pzs'
   
   // Formatear la cantidad
-  const cantidadFormateada = cantidad % 1 === 0 ? cantidad.toString() : cantidad.toFixed(1)
+  const cantidadFormateada = cantidadNormalizada % 1 === 0 ? cantidadNormalizada.toString() : cantidadNormalizada.toFixed(1)
   
   return `${cantidadFormateada} ${unidadSimplificada}`
 }

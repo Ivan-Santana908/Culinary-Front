@@ -11,6 +11,7 @@ import CompletarPerfilView from '@/views/CompletarPerfilView.vue'
 import ParaMiView from '@/views/ParaMiView.vue'
 import PlanSemanalView from '@/views/PlanSemanalView.vue'
 import AdminView from '@/views/AdminView.vue'
+import MiDespensaView from '@/views/MiDespensaView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView },
@@ -32,6 +33,12 @@ const routes = [
     path: '/yo',
     name: 'para-mi',
     component: ParaMiView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mi-despensa',
+    name: 'mi-despensa',
+    component: MiDespensaView,
     meta: { requiresAuth: true }
   },
   {

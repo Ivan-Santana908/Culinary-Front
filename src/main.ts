@@ -5,6 +5,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import { createPinia } from 'pinia'
+import { registerSW } from 'virtual:pwa-register'
 
 // 1. Crear instancia de la app
 const app = createApp(App)
@@ -15,3 +16,8 @@ app.use(router)
 
 // 3. Montar en el DOM
 app.mount('#app')
+
+// 4. Activar PWA en produccion
+if (import.meta.env.PROD) {
+	registerSW({ immediate: true })
+}

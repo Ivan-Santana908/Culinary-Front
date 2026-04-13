@@ -1,37 +1,29 @@
 <template>
   <DefaultLayout>
     <div class="min-h-screen bg-amber-50 py-12 px-4">
-      <!-- Header -->
       <div class="max-w-7xl mx-auto text-center mb-12">
-        <h1 class="text-4xl font-bold text-gray-900 mb-4">
-          Tu Plan Semanal
-        </h1>
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">Tu Plan Semanal</h1>
         <p class="text-lg text-gray-600 max-w-2xl mx-auto">
           Organiza tus comidas para la semana y mantén una alimentación equilibrada
         </p>
       </div>
 
-      <!-- Plan Semanal Grid -->
       <div class="max-w-7xl mx-auto mb-12">
         <div class="grid gap-6 md:grid-cols-7">
-          <!-- Días de la semana -->
           <div
             v-for="(receta, dia) in planSemanal"
             :key="dia"
             class="bg-white rounded-2xl shadow-lg overflow-hidden"
           >
-            <!-- Cabecera del día -->
             <div class="bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-3">
               <h3 class="text-lg font-semibold text-white capitalize">{{ dia }}</h3>
             </div>
 
-            <!-- Contenido del día -->
             <div class="p-4">
               <template v-if="receta">
-                <!-- Receta asignada -->
                 <div class="space-y-4">
-                  <img 
-                    :src="receta.imagen" 
+                  <img
+                    :src="receta.imagen"
                     :alt="receta.titulo"
                     class="w-full h-32 object-cover rounded-lg shadow-md"
                   />
@@ -58,7 +50,6 @@
                 </div>
               </template>
               <template v-else>
-                <!-- Sin receta asignada -->
                 <div class="h-full flex flex-col items-center justify-center py-6 space-y-4">
                   <div class="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,9 +69,7 @@
         </div>
       </div>
 
-      <!-- Stats Cards -->
       <div class="max-w-7xl mx-auto grid md:grid-cols-3 gap-8 mb-12">
-        <!-- Total calorías -->
         <div class="bg-white rounded-xl shadow-lg p-6">
           <div class="flex items-center justify-between">
             <h4 class="text-lg font-semibold text-gray-900">Total calorías</h4>
@@ -91,15 +80,11 @@
             </div>
           </div>
           <p class="text-3xl font-bold text-gray-900 mt-4">{{ totalCalorias }} kcal</p>
-          <p :class="[
-            'text-sm mt-2',
-            estadoMeta === 'text-red-500 font-semibold' ? 'text-red-600' : 'text-green-600'
-          ]">
+          <p :class="['text-sm mt-2', estadoMeta === 'text-red-500 font-semibold' ? 'text-red-600' : 'text-green-600']">
             {{ textoMeta }}
           </p>
         </div>
 
-        <!-- Lista de compras -->
         <div class="bg-white rounded-xl shadow-lg p-6 md:col-span-2">
           <div class="flex items-center justify-between mb-6">
             <h4 class="text-lg font-semibold text-gray-900">Lista de compras</h4>
@@ -108,13 +93,13 @@
             </button>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div 
-              v-for="(item, nombre) in listaIngredientes" 
+            <div
+              v-for="(item, nombre) in listaIngredientes"
               :key="nombre"
               class="flex items-center space-x-2 p-2 rounded-lg bg-amber-50"
             >
               <span class="text-gray-900">{{ nombre }}</span>
-              <span class="text-sm text-gray-500">({{ item.total }} {{ item.unidad }})</span>
+              <span class="text-sm text-gray-500">({{ formatItem(nombre, item.total, item.unidad) }})</span>
             </div>
           </div>
         </div>
@@ -129,6 +114,7 @@ import { ref, computed, onMounted } from 'vue'
 import { planSemanal } from '@/stores/planStore'
 import { useUserStore } from '@/stores/userStore'
 import { getRecetas } from '@/services/recetasService'
+import { formatQuantity, resolveDisplayMeasure } from '@/utils/recetasDisponibles'
 
 const usuario = useUserStore()
 
@@ -196,4 +182,9 @@ const listaIngredientes = computed(() => {
 
   return contador
 })
+
+function formatItem(nombre: string, total: number, unidad: string) {
+  const medida = resolveDisplayMeasure(nombre, total, unidad)
+  return `${formatQuantity(medida.cantidad)} ${medida.unidad}`
+}
 </script>

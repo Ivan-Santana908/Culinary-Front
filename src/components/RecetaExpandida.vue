@@ -6,7 +6,7 @@
       <!-- Imagen lateral -->
       <div class="md:w-1/2 bg-gray-100 flex items-center justify-center p-6">
         <img
-          :src="receta.imagen || '/placeholder-receta.jpg'"
+          :src="receta.imagen || '/placeholder-receta.svg'"
           :alt="receta.titulo"
           class="rounded-lg object-contain max-h-[400px] w-auto transition-transform duration-300 hover:scale-105"
         />
