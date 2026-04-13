@@ -71,5 +71,6 @@ export default defineConfig({
   preview: {
     port: 5173,
     strictPort: true,
+    allowedHosts: ['culinary-front-production.up.railway.app']
   }
 })
