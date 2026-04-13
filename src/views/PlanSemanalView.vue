@@ -88,18 +88,35 @@
         <div class="bg-white rounded-xl shadow-lg p-6 md:col-span-2">
           <div class="flex items-center justify-between mb-6">
             <h4 class="text-lg font-semibold text-gray-900">Lista de compras</h4>
-            <button class="text-amber-600 hover:text-amber-700 font-medium text-sm">
-              Exportar lista
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                @click="copiarLista"
+                :disabled="listaCompraPlan.length === 0"
+                class="text-amber-600 hover:text-amber-700 font-medium text-sm disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                Copiar lista
+              </button>
+              <button
+                @click="descargarLista"
+                :disabled="listaCompraPlan.length === 0"
+                class="text-amber-600 hover:text-amber-700 font-medium text-sm disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                Descargar .txt
+              </button>
+            </div>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <p v-if="exportMensaje" class="text-sm text-green-700 mb-3">{{ exportMensaje }}</p>
+          <div v-if="listaCompraPlan.length === 0" class="text-sm text-gray-500">
+            No hay ingredientes faltantes para las recetas asignadas en tu plan semanal.
+          </div>
+          <div v-else class="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div
-              v-for="(item, nombre) in listaIngredientes"
-              :key="nombre"
+              v-for="item in listaCompraPlan"
+              :key="`${item.nombre}-${item.unidad}`"
               class="flex items-center space-x-2 p-2 rounded-lg bg-amber-50"
             >
-              <span class="text-gray-900">{{ nombre }}</span>
-              <span class="text-sm text-gray-500">({{ formatItem(nombre, item.total, item.unidad) }})</span>
+              <span class="text-gray-900">{{ item.nombre }}</span>
+              <span class="text-sm text-gray-500">({{ formatQuantity(item.cantidad) }} {{ item.unidad }})</span>
             </div>
           </div>
         </div>
@@ -113,8 +130,8 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { ref, computed, onMounted } from 'vue'
 import { planSemanal } from '@/stores/planStore'
 import { useUserStore } from '@/stores/userStore'
-import { getRecetas } from '@/services/recetasService'
-import { formatQuantity, resolveDisplayMeasure } from '@/utils/recetasDisponibles'
+import { getRecetas, getRecetasDisponibles, type RecordatorioFaltantes } from '@/services/recetasService'
+import { buildListaCompra, buildListaCompraTexto, formatQuantity, getRecetaId } from '@/utils/recetasDisponibles'
 
 const usuario = useUserStore()
 
@@ -122,12 +139,15 @@ import type { Receta } from '@/types/Receta'
 
 const recetasDisponibles = ref<Receta[]>([])
 const cargando = ref(true)
+const recordatorios = ref<RecordatorioFaltantes[]>([])
+const exportMensaje = ref('')
 
 onMounted(async () => {
   try {
     cargando.value = true
-    const res = await getRecetas()
-    recetasDisponibles.value = res.data
+    const [resRecetas, resDisponibles] = await Promise.all([getRecetas(), getRecetasDisponibles()])
+    recetasDisponibles.value = resRecetas.data
+    recordatorios.value = resDisponibles.data.recordatorios || []
   } catch (error) {
     console.error('Error cargando recetas:', error)
   } finally {
@@ -163,28 +183,63 @@ const textoMeta = computed(() => {
     : '✅ Estás dentro de tu objetivo nutricional.'
 })
 
-const listaIngredientes = computed(() => {
-  const contador: Record<string, { total: number; unidad: string }> = {}
+const recordatoriosPlan = computed(() => {
+  const idsPlan = new Set(
+    Object.values(planSemanal)
+      .filter((receta): receta is Receta => !!receta)
+      .map((receta) => getRecetaId(receta))
+      .filter(Boolean)
+  )
 
-  Object.values(planSemanal).forEach(receta => {
-    receta?.ingredientes.forEach((recetaIng) => {
-      const { ingrediente, cantidad, nombre: nombreFlat, unidad: unidadFlat } = recetaIng
-      const nombre = ingrediente?.nombre || nombreFlat || ''
-      const unidad = ingrediente?.unidad || unidadFlat || ''
-      const clave = nombre.toLowerCase().trim()
-      if (!contador[clave]) {
-        contador[clave] = { total: cantidad, unidad }
-      } else {
-        contador[clave].total += cantidad
-      }
-    })
-  })
-
-  return contador
+  return recordatorios.value.filter((recordatorio) => idsPlan.has(recordatorio.receta_id))
 })
 
-function formatItem(nombre: string, total: number, unidad: string) {
-  const medida = resolveDisplayMeasure(nombre, total, unidad)
-  return `${formatQuantity(medida.cantidad)} ${medida.unidad}`
+const listaCompraPlan = computed(() => buildListaCompra(recordatoriosPlan.value))
+
+function obtenerTextoLista(): string {
+  return buildListaCompraTexto(listaCompraPlan.value)
+}
+
+async function copiarLista() {
+  if (listaCompraPlan.value.length === 0) {
+    exportMensaje.value = 'No hay ingredientes faltantes para exportar.'
+    return
+  }
+
+  const texto = obtenerTextoLista()
+  try {
+    await navigator.clipboard?.writeText(texto)
+    exportMensaje.value = 'Lista copiada al portapapeles.'
+  } catch (error) {
+    console.error('No se pudo copiar la lista:', error)
+    exportMensaje.value = 'No se pudo exportar la lista en este navegador.'
+  }
+}
+
+function descargarLista() {
+  if (listaCompraPlan.value.length === 0) {
+    exportMensaje.value = 'No hay ingredientes faltantes para exportar.'
+    return
+  }
+
+  try {
+    const contenido = obtenerTextoLista()
+    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const fecha = new Date().toISOString().slice(0, 10)
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `lista-compra-plan-${fecha}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    exportMensaje.value = 'Archivo .txt descargado.'
+  } catch (error) {
+    console.error('No se pudo descargar la lista:', error)
+    exportMensaje.value = 'No se pudo descargar la lista.'
+  }
 }
 </script>
